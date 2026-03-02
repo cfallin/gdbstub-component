@@ -1,0 +1,20 @@
+[package]
+name = "gdbstub-component"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen = "0.53.0"
+anyhow = "1.0.102"
+structopt = "0.3.26"
+wstd = "0.6.5"
+wasip2 = "1.0"
+futures = "0.3.31"
+
+[features]
+default = []
+
+trace = []
