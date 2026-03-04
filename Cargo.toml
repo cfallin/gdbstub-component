@@ -13,6 +13,7 @@ structopt = "0.3.26"
 wstd = "0.6.5"
 wasip2 = "1.0"
 futures = "0.3.31"
+gdbstub = { path = "../gdbstub" }
 
 [features]
 default = []
