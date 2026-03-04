@@ -9,8 +9,8 @@ mod api;
 mod target;
 
 use crate::{
-    addr::{AddrSpace, WasmAddrType},
-    api::{Frame, Memory, Module, WasmType, WasmValue},
+    addr::AddrSpace,
+    api::{WasmType, WasmValue},
 };
 use addr::WasmAddr;
 use anyhow::Result;
@@ -23,7 +23,6 @@ use gdbstub::{
         state_machine::{GdbStubStateMachine, GdbStubStateMachineInner, state::Running},
     },
 };
-use std::collections::HashMap;
 use structopt::StructOpt;
 use wstd::{
     io::{AsyncRead, AsyncWrite},
@@ -170,10 +169,22 @@ impl<'a> Debugger<'a> {
     }
 
     fn update_on_stop(&mut self) {
-        if let Some(frame) = self.debuggee.exit_frames().into_iter().next() {
-            self.current_pc = self.frame_to_pc(&frame);
+        self.addr_space.update(self.debuggee).unwrap();
+
+        // Cache all frame handles for the duration of this stop.
+        // The Wasm trait methods take `&self` and need access to
+        // frames by depth, so we eagerly walk the full stack here.
+        self.frame_cache.clear();
+        let mut next = self.debuggee.exit_frames().into_iter().next();
+        while let Some(f) = next {
+            next = f.parent_frame(self.debuggee).unwrap();
+            self.frame_cache.push(f);
+        }
+
+        if let Some(f) = self.frame_cache.first() {
+            self.current_pc = self.addr_space.frame_to_pc(f, self.debuggee);
         } else {
-            self.current_pc = WasmAddr::from_raw(0);
+            self.current_pc = WasmAddr::from_raw(0).unwrap();
         }
     }
 
@@ -189,6 +200,7 @@ impl<'a> Debugger<'a> {
             }
             api::Event::Breakpoint => {
                 trace!("Event::Breakpoint");
+                self.update_on_stop();
                 let stop_reason = if self.single_stepping {
                     MultiThreadStopReason::DoneStep
                 } else {
@@ -200,6 +212,7 @@ impl<'a> Debugger<'a> {
                 trace!("other event: {event:?}");
                 if self.interrupt {
                     self.interrupt = false;
+                    self.update_on_stop();
                     Ok(inner.report_stop(self, MultiThreadStopReason::Signal(Signal::SIGINT))?)
                 } else {
                     if self.single_stepping {
@@ -211,40 +224,6 @@ impl<'a> Debugger<'a> {
                 }
             }
         }
-    }
-
-    fn module_id(&mut self, module: &Module) -> u32 {
-        *self
-            .module_ids
-            .entry(module.unique_id())
-            .or_insert_with(|| {
-                let id = u32::try_from(self.modules.len()).unwrap();
-                self.modules.push(module.clone());
-                let bytecode = module.bytecode().unwrap();
-                self.module_bytecode.push(bytecode);
-                id
-            })
-    }
-
-    fn memory_id(&mut self, memory: &Memory) -> u32 {
-        *self
-            .memory_ids
-            .entry(memory.unique_id())
-            .or_insert_with(|| {
-                let id = u32::try_from(self.memories.len()).unwrap();
-                self.memories.push(memory.clone());
-                id
-            })
-    }
-
-    fn frame_to_pc(&mut self, frame: &Frame) -> WasmAddr {
-        let module = frame
-            .get_instance(self.debuggee)
-            .unwrap()
-            .get_module(self.debuggee);
-        let module = self.module_id(&module);
-        let pc = frame.get_pc(self.debuggee).unwrap();
-        WasmAddr::new(WasmAddrType::Object, module, pc)
     }
 
     fn value_to_bytes(&self, value: WasmValue) -> Vec<u8> {
