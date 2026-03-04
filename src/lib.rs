@@ -1,8 +1,4 @@
-/* TODO
-
-- support clean connection shutdown (and re-attach)
-
- */
+//! gdbstub protocol implementation in Wasmtime's debug-main world.
 
 mod addr;
 mod api;
@@ -23,21 +19,13 @@ use gdbstub::{
         state_machine::{GdbStubStateMachine, GdbStubStateMachineInner, state::Running},
     },
 };
+use log::trace;
 use structopt::StructOpt;
 use wstd::{
     io::{AsyncRead, AsyncWrite},
     iter::AsyncIterator,
     net::{TcpListener, TcpStream},
 };
-
-#[macro_export]
-macro_rules! trace {
-    ($($tt:tt)*) => {
-        if cfg!(feature = "trace") {
-            eprintln!($($tt)*);
-        }
-    }
-}
 
 /// Command-line options.
 #[derive(StructOpt)]
@@ -205,7 +193,10 @@ impl<'a> Debugger<'a> {
                 Ok(inner.report_stop(self, MultiThreadStopReason::Exited(0))?)
             }
             api::Event::Breakpoint => {
-                trace!("Event::Breakpoint");
+                trace!(
+                    "Event::Breakpoint; single_stepping = {}",
+                    self.single_stepping
+                );
                 self.update_on_stop();
                 let stop_reason = if self.single_stepping {
                     MultiThreadStopReason::DoneStep

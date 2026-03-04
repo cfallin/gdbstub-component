@@ -21,10 +21,10 @@ use gdbstub::target::ext::breakpoints::{
     Breakpoints, BreakpointsOps, SwBreakpoint, SwBreakpointOps,
 };
 use gdbstub::target::ext::libraries::{Libraries, LibrariesOps};
-use gdbstub::target::ext::memory_map::{MemoryMap, MemoryMapOps};
 use gdbstub::target::ext::lldb_register_info_override::{
     Callback, CallbackToken, LldbRegisterInfoOverride, LldbRegisterInfoOverrideOps,
 };
+use gdbstub::target::ext::memory_map::{MemoryMap, MemoryMapOps};
 use gdbstub::target::ext::wasm::{Wasm, WasmOps};
 use std::num::NonZeroUsize;
 
@@ -62,7 +62,6 @@ impl<'a> Target for Debugger<'a> {
         Some(self)
     }
 }
-
 
 impl<'a> MultiThreadBase for Debugger<'a> {
     fn read_registers(&mut self, regs: &mut WasmRegisters, _tid: Tid) -> TargetResult<(), Self> {
@@ -164,10 +163,10 @@ impl<'a> SingleRegisterAccess<Tid> for Debugger<'a> {
     }
 }
 
-
 impl<'a> MultiThreadResume for Debugger<'a> {
     fn resume(&mut self) -> Result<(), Self::Error> {
         self.frame_cache.clear();
+        log::trace!("resume() -> single_stepping = {}", self.single_stepping);
         if self.single_stepping {
             self.start_single_step(api::ResumptionValue::Normal);
         } else {
@@ -217,7 +216,6 @@ impl<'a> MultiThreadSchedulerLocking for Debugger<'a> {
     }
 }
 
-
 impl<'a> Breakpoints for Debugger<'a> {
     #[inline(always)]
     fn support_sw_breakpoint(&mut self) -> Option<SwBreakpointOps<'_, Self>> {
@@ -259,7 +257,6 @@ impl<'a> SwBreakpoint for Debugger<'a> {
     }
 }
 
-
 impl<'a> LldbRegisterInfoOverride for Debugger<'a> {
     fn lldb_register_info<'b>(
         &mut self,
@@ -285,7 +282,6 @@ impl<'a> LldbRegisterInfoOverride for Debugger<'a> {
         })
     }
 }
-
 
 impl<'a> Libraries for Debugger<'a> {
     fn get_libraries(
@@ -315,9 +311,13 @@ impl<'a> Libraries for Debugger<'a> {
     }
 }
 
-
 impl<'a> MemoryMap for Debugger<'a> {
-    fn memory_map_xml(&self, offset: u64, length: usize, buf: &mut [u8]) -> TargetResult<usize, Self> {
+    fn memory_map_xml(
+        &self,
+        offset: u64,
+        length: usize,
+        buf: &mut [u8],
+    ) -> TargetResult<usize, Self> {
         let xml = self.addr_space.memory_map_xml(self.debuggee);
         let xml_bytes = xml.as_bytes();
         let offset = usize::try_from(offset).unwrap();
@@ -330,7 +330,6 @@ impl<'a> MemoryMap for Debugger<'a> {
         Ok(n)
     }
 }
-
 
 impl<'a> Wasm for Debugger<'a> {
     fn wasm_call_stack(&self, _tid: Tid, callback: &mut dyn FnMut(u64)) -> Result<(), Self::Error> {
@@ -412,7 +411,6 @@ impl<'a> Wasm for Debugger<'a> {
         Ok(bytes.len())
     }
 }
-
 
 /// Architecture marker for the Wasm synthetic address space.
 ///

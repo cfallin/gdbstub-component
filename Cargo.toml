@@ -20,4 +20,3 @@ env_logger = "*"
 [features]
 default = []
 
-trace = []
