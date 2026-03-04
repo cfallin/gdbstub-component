@@ -14,6 +14,9 @@ use gdbstub::target::ext::base::multithread::{
     MultiThreadBase, MultiThreadResume, MultiThreadResumeOps, MultiThreadSchedulerLocking,
     MultiThreadSchedulerLockingOps, MultiThreadSingleStep, MultiThreadSingleStepOps,
 };
+use gdbstub::target::ext::base::single_register_access::{
+    SingleRegisterAccess, SingleRegisterAccessOps,
+};
 use gdbstub::target::ext::breakpoints::{
     Breakpoints, BreakpointsOps, SwBreakpoint, SwBreakpointOps,
 };
@@ -58,20 +61,12 @@ impl<'a> Target for Debugger<'a> {
 // --- MultiThreadBase ---
 
 impl<'a> MultiThreadBase for Debugger<'a> {
-    fn read_registers(
-        &mut self,
-        regs: &mut WasmRegisters,
-        _tid: Tid,
-    ) -> TargetResult<(), Self> {
+    fn read_registers(&mut self, regs: &mut WasmRegisters, _tid: Tid) -> TargetResult<(), Self> {
         regs.pc = self.current_pc.as_raw();
         Ok(())
     }
 
-    fn write_registers(
-        &mut self,
-        regs: &WasmRegisters,
-        _tid: Tid,
-    ) -> TargetResult<(), Self> {
+    fn write_registers(&mut self, regs: &WasmRegisters, _tid: Tid) -> TargetResult<(), Self> {
         self.current_pc = WasmAddr::from_raw(regs.pc).map_err(|_| TargetError::NonFatal)?;
         Ok(())
     }
@@ -85,7 +80,9 @@ impl<'a> MultiThreadBase for Debugger<'a> {
         let addr = WasmAddr::from_raw(start_addr).map_err(|_| TargetError::NonFatal)?;
         let debuggee = self.debuggee;
         match self.addr_space.lookup(addr, debuggee) {
-            AddrSpaceLookup::Module { bytecode, offset, .. } => {
+            AddrSpaceLookup::Module {
+                bytecode, offset, ..
+            } => {
                 let offset = usize::try_from(offset).unwrap();
                 let avail = bytecode.len() - offset;
                 let n = avail.min(data.len());
@@ -105,12 +102,7 @@ impl<'a> MultiThreadBase for Debugger<'a> {
         }
     }
 
-    fn write_addrs(
-        &mut self,
-        _start_addr: u64,
-        _data: &[u8],
-        _tid: Tid,
-    ) -> TargetResult<(), Self> {
+    fn write_addrs(&mut self, _start_addr: u64, _data: &[u8], _tid: Tid) -> TargetResult<(), Self> {
         Err(TargetError::NonFatal)
     }
 
@@ -123,8 +115,48 @@ impl<'a> MultiThreadBase for Debugger<'a> {
         Ok(())
     }
 
+    fn support_single_register_access(&mut self) -> Option<SingleRegisterAccessOps<'_, Tid, Self>> {
+        Some(self)
+    }
+
     fn support_resume(&mut self) -> Option<MultiThreadResumeOps<'_, Self>> {
         Some(self)
+    }
+}
+
+impl<'a> SingleRegisterAccess<Tid> for Debugger<'a> {
+    fn read_register(
+        &mut self,
+        _tid: Tid,
+        reg_id: WasmRegId,
+        buf: &mut [u8],
+    ) -> TargetResult<usize, Self> {
+        match reg_id {
+            WasmRegId::Pc => {
+                let bytes = self.current_pc.as_raw().to_le_bytes();
+                let n = bytes.len().min(buf.len());
+                buf[..n].copy_from_slice(&bytes[..n]);
+                Ok(n)
+            }
+        }
+    }
+
+    fn write_register(
+        &mut self,
+        _tid: Tid,
+        reg_id: WasmRegId,
+        val: &[u8],
+    ) -> TargetResult<(), Self> {
+        match reg_id {
+            WasmRegId::Pc => {
+                if val.len() < 8 {
+                    return Err(TargetError::NonFatal);
+                }
+                let raw = u64::from_le_bytes(val[..8].try_into().unwrap());
+                self.current_pc = WasmAddr::from_raw(raw).map_err(|_| TargetError::NonFatal)?;
+                Ok(())
+            }
+        }
     }
 }
 
@@ -286,11 +318,7 @@ impl<'a> Libraries for Debugger<'a> {
 // --- Wasm ---
 
 impl<'a> Wasm for Debugger<'a> {
-    fn wasm_call_stack(
-        &self,
-        _tid: Tid,
-        callback: &mut dyn FnMut(u64),
-    ) -> Result<(), Self::Error> {
+    fn wasm_call_stack(&self, _tid: Tid, callback: &mut dyn FnMut(u64)) -> Result<(), Self::Error> {
         let debuggee = self.debuggee;
         for f in &self.frame_cache {
             let pc = self.addr_space.frame_to_pc(f, debuggee);

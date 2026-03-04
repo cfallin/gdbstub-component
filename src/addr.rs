@@ -193,16 +193,12 @@ impl AddrSpace {
 
     /// Iterate over the base `WasmAddr` of every registered module.
     pub fn module_base_addrs(&self) -> impl Iterator<Item = WasmAddr> + '_ {
-        (0..self.modules.len()).map(|idx| {
-            WasmAddr::new(WasmAddrType::Object, u32::try_from(idx).unwrap(), 0)
-        })
+        (0..self.modules.len())
+            .map(|idx| WasmAddr::new(WasmAddrType::Object, u32::try_from(idx).unwrap(), 0))
     }
 
     pub fn frame_to_pc(&self, frame: &Frame, debuggee: &Debuggee) -> WasmAddr {
-        let module = frame
-            .get_instance(debuggee)
-            .unwrap()
-            .get_module(debuggee);
+        let module = frame.get_instance(debuggee).unwrap().get_module(debuggee);
         let &module_id = self
             .module_ids
             .get(&module.unique_id())
