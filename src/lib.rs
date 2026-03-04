@@ -199,11 +199,16 @@ impl<'a> Debugger<'a> {
                 );
                 self.update_on_stop();
                 let stop_reason = if self.single_stepping {
-                    MultiThreadStopReason::DoneStep
+                    MultiThreadStopReason::SignalWithThread {
+                        tid: self.tid,
+                        signal: Signal::SIGTRAP,
+                    }
                 } else {
                     MultiThreadStopReason::SwBreak(self.tid)
                 };
-                Ok(inner.report_stop(self, stop_reason)?)
+                let pc_bytes = self.current_pc.as_raw().to_le_bytes();
+                let mut regs = core::iter::once((0u32, pc_bytes.as_slice()));
+                Ok(inner.report_stop_with_regs(self, stop_reason, &mut regs)?)
             }
             _ => {
                 trace!("other event: {event:?}");
