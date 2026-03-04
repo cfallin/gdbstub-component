@@ -51,6 +51,9 @@ api::export!(Component with_types_in api);
 
 impl api::exports::wasmtime::debugger::debugger::Guest for Component {
     fn debug(d: &api::Debuggee, args: Vec<String>) {
+        env_logger::Builder::new()
+            .filter_level(log::LevelFilter::Trace)
+            .init();
         let options = Options::from_iter(args);
         let mut debugger = Debugger {
             debuggee: d,
@@ -111,6 +114,7 @@ impl<'a> Debugger<'a> {
 
                     // Wait for an inbound network byte.
                     let Some(byte) = inner.borrow_conn().read_byte().await? else {
+                        inner.borrow_conn().flush().await?;
                         break 'mainloop;
                     };
 
@@ -134,6 +138,7 @@ impl<'a> Debugger<'a> {
                         }
                         byte = inner.borrow_conn().read_byte().fuse() => {
                             let Some(byte) = byte? else {
+                                inner.borrow_conn().flush().await?;
                                 // Connection closed.
                                 break 'mainloop;
                             };
@@ -145,7 +150,8 @@ impl<'a> Debugger<'a> {
                     inner.borrow_conn().flush().await?;
                     stub = inner.interrupt_handled(self, None::<MultiThreadStopReason<u64>>)?;
                 }
-                GdbStubStateMachine::Disconnected(_inner) => {
+                GdbStubStateMachine::Disconnected(mut inner) => {
+                    inner.borrow_conn().flush().await?;
                     break 'mainloop;
                 }
             }

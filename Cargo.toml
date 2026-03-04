@@ -14,6 +14,8 @@ wstd = "0.6.5"
 wasip2 = "1.0"
 futures = "0.3.31"
 gdbstub = { path = "../gdbstub" }
+log = "*"
+env_logger = "*"
 
 [features]
 default = []

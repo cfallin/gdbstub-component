@@ -21,6 +21,7 @@ use gdbstub::target::ext::breakpoints::{
     Breakpoints, BreakpointsOps, SwBreakpoint, SwBreakpointOps,
 };
 use gdbstub::target::ext::libraries::{Libraries, LibrariesOps};
+use gdbstub::target::ext::memory_map::{MemoryMap, MemoryMapOps};
 use gdbstub::target::ext::lldb_register_info_override::{
     Callback, CallbackToken, LldbRegisterInfoOverride, LldbRegisterInfoOverrideOps,
 };
@@ -56,9 +57,12 @@ impl<'a> Target for Debugger<'a> {
     fn support_libraries(&mut self) -> Option<LibrariesOps<'_, Self>> {
         Some(self)
     }
+
+    fn support_memory_map(&mut self) -> Option<MemoryMapOps<'_, Self>> {
+        Some(self)
+    }
 }
 
-// --- MultiThreadBase ---
 
 impl<'a> MultiThreadBase for Debugger<'a> {
     fn read_registers(&mut self, regs: &mut WasmRegisters, _tid: Tid) -> TargetResult<(), Self> {
@@ -160,7 +164,6 @@ impl<'a> SingleRegisterAccess<Tid> for Debugger<'a> {
     }
 }
 
-// --- MultiThreadResume / SingleStep ---
 
 impl<'a> MultiThreadResume for Debugger<'a> {
     fn resume(&mut self) -> Result<(), Self::Error> {
@@ -214,7 +217,6 @@ impl<'a> MultiThreadSchedulerLocking for Debugger<'a> {
     }
 }
 
-// --- Breakpoints ---
 
 impl<'a> Breakpoints for Debugger<'a> {
     #[inline(always)]
@@ -257,7 +259,6 @@ impl<'a> SwBreakpoint for Debugger<'a> {
     }
 }
 
-// --- LLDB Register Info ---
 
 impl<'a> LldbRegisterInfoOverride for Debugger<'a> {
     fn lldb_register_info<'b>(
@@ -285,7 +286,6 @@ impl<'a> LldbRegisterInfoOverride for Debugger<'a> {
     }
 }
 
-// --- Libraries ---
 
 impl<'a> Libraries for Debugger<'a> {
     fn get_libraries(
@@ -315,7 +315,22 @@ impl<'a> Libraries for Debugger<'a> {
     }
 }
 
-// --- Wasm ---
+
+impl<'a> MemoryMap for Debugger<'a> {
+    fn memory_map_xml(&self, offset: u64, length: usize, buf: &mut [u8]) -> TargetResult<usize, Self> {
+        let xml = self.addr_space.memory_map_xml(self.debuggee);
+        let xml_bytes = xml.as_bytes();
+        let offset = usize::try_from(offset).unwrap();
+        if offset >= xml_bytes.len() {
+            return Ok(0);
+        }
+        let avail = xml_bytes.len() - offset;
+        let n = avail.min(length).min(buf.len());
+        buf[..n].copy_from_slice(&xml_bytes[offset..offset + n]);
+        Ok(n)
+    }
+}
+
 
 impl<'a> Wasm for Debugger<'a> {
     fn wasm_call_stack(&self, _tid: Tid, callback: &mut dyn FnMut(u64)) -> Result<(), Self::Error> {
@@ -398,7 +413,6 @@ impl<'a> Wasm for Debugger<'a> {
     }
 }
 
-// --- Architecture types ---
 
 /// Architecture marker for the Wasm synthetic address space.
 ///

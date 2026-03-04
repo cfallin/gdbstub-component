@@ -197,6 +197,45 @@ impl AddrSpace {
             .map(|idx| WasmAddr::new(WasmAddrType::Object, u32::try_from(idx).unwrap(), 0))
     }
 
+    /// Build the GDB memory-map XML describing all known regions.
+    ///
+    /// Module bytecode regions are reported as `rom` (read-only), and
+    /// linear memories as `ram` (read-write).
+    pub fn memory_map_xml(&self, debuggee: &Debuggee) -> String {
+        use std::fmt::Write;
+        let mut xml = String::from(
+            "<?xml version=\"1.0\"?><!DOCTYPE memory-map SYSTEM \"memory-map.dtd\"><memory-map>",
+        );
+        for (idx, bc) in self.module_bytecode.iter().enumerate() {
+            let start = WasmAddr::new(WasmAddrType::Object, u32::try_from(idx).unwrap(), 0);
+            let len = bc.len();
+            if len > 0 {
+                write!(
+                    xml,
+                    "<memory type=\"rom\" start=\"0x{:x}\" length=\"0x{:x}\"/>",
+                    start.as_raw(),
+                    len
+                )
+                .unwrap();
+            }
+        }
+        for (idx, mem) in self.memories.iter().enumerate() {
+            let start = WasmAddr::new(WasmAddrType::Memory, u32::try_from(idx).unwrap(), 0);
+            let len = mem.size_bytes(debuggee);
+            if len > 0 {
+                write!(
+                    xml,
+                    "<memory type=\"ram\" start=\"0x{:x}\" length=\"0x{:x}\"/>",
+                    start.as_raw(),
+                    len
+                )
+                .unwrap();
+            }
+        }
+        xml.push_str("</memory-map>");
+        xml
+    }
+
     pub fn frame_to_pc(&self, frame: &Frame, debuggee: &Debuggee) -> WasmAddr {
         let module = frame.get_instance(debuggee).unwrap().get_module(debuggee);
         let &module_id = self
