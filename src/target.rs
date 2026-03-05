@@ -417,48 +417,26 @@ impl<'a> Wasm for Debugger<'a> {
     }
 }
 
-fn hex_encode_str(s: &str, buf: &mut [u8]) -> usize {
+fn hex_encode_to(data: &[u8], write: &mut dyn FnMut(&[u8])) {
     const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut i = 0;
-    for &b in s.as_bytes() {
-        if i + 2 > buf.len() {
-            break;
-        }
-        buf[i] = HEX[(b >> 4) as usize];
-        buf[i + 1] = HEX[(b & 0xf) as usize];
-        i += 2;
+    for &b in data {
+        write(&[HEX[(b >> 4) as usize], HEX[(b & 0xf) as usize]]);
     }
-    i
 }
 
 impl<'a> ProcessInfo for Debugger<'a> {
-    fn host_info(&self, buf: &mut [u8]) -> Result<usize, Self::Error> {
-        let mut s = String::new();
-        s.push_str("triple:");
-        let triple = "wasm32-unknown-unknown-wasm";
-        let mut hex_buf = [0u8; 128];
-        let hex_len = hex_encode_str(triple, &mut hex_buf);
-        s.push_str(core::str::from_utf8(&hex_buf[..hex_len]).unwrap());
-        s.push_str(";endian:little;ptrsize:4;");
-        let bytes = s.as_bytes();
-        let n = bytes.len().min(buf.len());
-        buf[..n].copy_from_slice(&bytes[..n]);
-        Ok(n)
+    fn host_info(&self, write: &mut dyn FnMut(&[u8])) -> Result<(), Self::Error> {
+        write(b"triple:");
+        hex_encode_to(b"wasm32-unknown-unknown-wasm", write);
+        write(b";endian:little;ptrsize:4;");
+        Ok(())
     }
 
-    fn process_info(&self, buf: &mut [u8]) -> Result<usize, Self::Error> {
-        let mut s = String::new();
-        s.push_str("pid:1;");
-        s.push_str("triple:");
-        let triple = "wasm32-unknown-unknown-wasm";
-        let mut hex_buf = [0u8; 128];
-        let hex_len = hex_encode_str(triple, &mut hex_buf);
-        s.push_str(core::str::from_utf8(&hex_buf[..hex_len]).unwrap());
-        s.push_str(";endian:little;ptrsize:4;");
-        let bytes = s.as_bytes();
-        let n = bytes.len().min(buf.len());
-        buf[..n].copy_from_slice(&bytes[..n]);
-        Ok(n)
+    fn process_info(&self, write: &mut dyn FnMut(&[u8])) -> Result<(), Self::Error> {
+        write(b"pid:1;triple:");
+        hex_encode_to(b"wasm32-unknown-unknown-wasm", write);
+        write(b";endian:little;ptrsize:4;");
+        Ok(())
     }
 }
 
