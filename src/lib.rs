@@ -32,6 +32,9 @@ use wstd::{
 struct Options {
     /// The TCP address to listen on, in `<addr>:<port>` format.
     tcp_address: String,
+    /// Verbose logging.
+    #[structopt(short = "v")]
+    verbose: bool,
 }
 
 struct Component;
@@ -39,10 +42,12 @@ api::export!(Component with_types_in api);
 
 impl api::exports::wasmtime::debugger::debugger::Guest for Component {
     fn debug(d: &api::Debuggee, args: Vec<String>) {
-        env_logger::Builder::new()
-            .filter_level(log::LevelFilter::Trace)
-            .init();
         let options = Options::from_iter(args);
+        if options.verbose {
+            env_logger::Builder::new()
+                .filter_level(log::LevelFilter::Trace)
+                .init();
+        }
         let mut debugger = Debugger {
             debuggee: d,
             tid: Tid::new(1).unwrap(),

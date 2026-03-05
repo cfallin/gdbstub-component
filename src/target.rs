@@ -25,6 +25,7 @@ use gdbstub::target::ext::lldb_register_info_override::{
     Callback, CallbackToken, LldbRegisterInfoOverride, LldbRegisterInfoOverrideOps,
 };
 use gdbstub::target::ext::memory_map::{MemoryMap, MemoryMapOps};
+use gdbstub::target::ext::process_info::{ProcessInfo, ProcessInfoOps};
 use gdbstub::target::ext::wasm::{Wasm, WasmOps};
 use std::num::NonZeroUsize;
 
@@ -59,6 +60,10 @@ impl<'a> Target for Debugger<'a> {
     }
 
     fn support_memory_map(&mut self) -> Option<MemoryMapOps<'_, Self>> {
+        Some(self)
+    }
+
+    fn support_process_info(&mut self) -> Option<ProcessInfoOps<'_, Self>> {
         Some(self)
     }
 }
@@ -293,7 +298,7 @@ impl<'a> Libraries for Debugger<'a> {
         let mut xml = String::from("<library-list>");
         for addr in self.addr_space.module_base_addrs() {
             xml.push_str(&format!(
-                "<library name=\"wasm\"><segment address=\"0x{:x}\"/></library>",
+                "<library name=\"wasm\"><section address=\"{}\"/></library>",
                 addr.as_raw()
             ));
         }
@@ -409,6 +414,51 @@ impl<'a> Wasm for Debugger<'a> {
         let bytes = self.value_to_bytes(val.clone());
         buf[..bytes.len()].copy_from_slice(&bytes);
         Ok(bytes.len())
+    }
+}
+
+fn hex_encode_str(s: &str, buf: &mut [u8]) -> usize {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut i = 0;
+    for &b in s.as_bytes() {
+        if i + 2 > buf.len() {
+            break;
+        }
+        buf[i] = HEX[(b >> 4) as usize];
+        buf[i + 1] = HEX[(b & 0xf) as usize];
+        i += 2;
+    }
+    i
+}
+
+impl<'a> ProcessInfo for Debugger<'a> {
+    fn host_info(&self, buf: &mut [u8]) -> Result<usize, Self::Error> {
+        let mut s = String::new();
+        s.push_str("triple:");
+        let triple = "wasm32-unknown-unknown-wasm";
+        let mut hex_buf = [0u8; 128];
+        let hex_len = hex_encode_str(triple, &mut hex_buf);
+        s.push_str(core::str::from_utf8(&hex_buf[..hex_len]).unwrap());
+        s.push_str(";endian:little;ptrsize:4;");
+        let bytes = s.as_bytes();
+        let n = bytes.len().min(buf.len());
+        buf[..n].copy_from_slice(&bytes[..n]);
+        Ok(n)
+    }
+
+    fn process_info(&self, buf: &mut [u8]) -> Result<usize, Self::Error> {
+        let mut s = String::new();
+        s.push_str("pid:1;");
+        s.push_str("triple:");
+        let triple = "wasm32-unknown-unknown-wasm";
+        let mut hex_buf = [0u8; 128];
+        let hex_len = hex_encode_str(triple, &mut hex_buf);
+        s.push_str(core::str::from_utf8(&hex_buf[..hex_len]).unwrap());
+        s.push_str(";endian:little;ptrsize:4;");
+        let bytes = s.as_bytes();
+        let n = bytes.len().min(buf.len());
+        buf[..n].copy_from_slice(&bytes[..n]);
+        Ok(n)
     }
 }
 
