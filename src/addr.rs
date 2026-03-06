@@ -246,8 +246,16 @@ impl AddrSpace {
         WasmAddr::new(WasmAddrType::Object, module_id, pc)
     }
 
-    /// Get the Memory or Module and offset within for a given
-    /// WasmAddr.
+    pub fn frame_to_return_addr(&self, frame: &Frame, debuggee: &Debuggee) -> Option<WasmAddr> {
+        let module = frame.get_instance(debuggee).unwrap().get_module(debuggee);
+        let &module_id = self
+            .module_ids
+            .get(&module.unique_id())
+            .expect("module not found in addr space");
+        let ret_pc = frame.get_return_address(debuggee).unwrap()?;
+        Some(WasmAddr::new(WasmAddrType::Object, module_id, ret_pc))
+    }
+
     pub fn lookup(&self, addr: WasmAddr, d: &Debuggee) -> AddrSpaceLookup<'_> {
         let index = usize::try_from(addr.module_index()).unwrap();
         match addr.addr_type() {
@@ -281,3 +289,4 @@ impl AddrSpace {
         }
     }
 }
+

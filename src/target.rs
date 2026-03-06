@@ -339,8 +339,19 @@ impl<'a> MemoryMap for Debugger<'a> {
 impl<'a> Wasm for Debugger<'a> {
     fn wasm_call_stack(&self, _tid: Tid, callback: &mut dyn FnMut(u64)) -> Result<(), Self::Error> {
         let debuggee = self.debuggee;
-        for f in &self.frame_cache {
-            let pc = self.addr_space.frame_to_pc(f, debuggee);
+        for (i, f) in self.frame_cache.iter().enumerate() {
+            // For non-innermost frames, report the return address
+            // (the instruction after the call) rather than the call
+            // instruction's PC. This matches the standard debugger
+            // convention and is needed for LLDB's `finish` command
+            // to set a breakpoint at the right address.
+            let pc = if i > 0 {
+                self.addr_space
+                    .frame_to_return_addr(f, debuggee)
+                    .unwrap_or_else(|| self.addr_space.frame_to_pc(f, debuggee))
+            } else {
+                self.addr_space.frame_to_pc(f, debuggee)
+            };
             callback(pc.as_raw());
         }
         Ok(())
