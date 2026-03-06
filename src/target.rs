@@ -5,7 +5,7 @@ use crate::addr::{AddrSpaceLookup, WasmAddr};
 use crate::api;
 use gdbstub::arch::lldb::{Encoding, Format, Generic, Register};
 use gdbstub::arch::{Arch, RegId, Registers};
-use gdbstub::common::{Signal, Tid};
+use gdbstub::common::{Endianness, Pid, Signal, Tid};
 use gdbstub::target::Target;
 use gdbstub::target::TargetError;
 use gdbstub::target::TargetResult;
@@ -25,7 +25,7 @@ use gdbstub::target::ext::lldb_register_info_override::{
     Callback, CallbackToken, LldbRegisterInfoOverride, LldbRegisterInfoOverrideOps,
 };
 use gdbstub::target::ext::memory_map::{MemoryMap, MemoryMapOps};
-use gdbstub::target::ext::process_info::{ProcessInfo, ProcessInfoOps};
+use gdbstub::target::ext::process_info::{InfoResponse, ProcessInfo, ProcessInfoOps};
 use gdbstub::target::ext::wasm::{Wasm, WasmOps};
 use std::num::NonZeroUsize;
 
@@ -349,18 +349,17 @@ impl<'a> Wasm for Debugger<'a> {
     fn read_wasm_local(
         &self,
         _tid: Tid,
-        frame_depth: u32,
-        index: u32,
+        frame_depth: usize,
+        index: usize,
         buf: &mut [u8; 16],
     ) -> Result<usize, Self::Error> {
-        let depth = usize::try_from(frame_depth).unwrap();
-        let Some(f) = self.frame_cache.get(depth) else {
+        let Some(f) = self.frame_cache.get(frame_depth) else {
             return Ok(0);
         };
         let Ok(locals) = f.get_locals(self.debuggee) else {
             return Ok(0);
         };
-        let Some(val) = locals.get(usize::try_from(index).unwrap()) else {
+        let Some(val) = locals.get(index) else {
             return Ok(0);
         };
         let bytes = self.value_to_bytes(val.clone());
@@ -371,19 +370,18 @@ impl<'a> Wasm for Debugger<'a> {
     fn read_wasm_global(
         &self,
         _tid: Tid,
-        frame_depth: u32,
-        index: u32,
+        frame_depth: usize,
+        index: usize,
         buf: &mut [u8; 16],
     ) -> Result<usize, Self::Error> {
-        let depth = usize::try_from(frame_depth).unwrap();
-        let Some(f) = self.frame_cache.get(depth) else {
+        let Some(f) = self.frame_cache.get(frame_depth) else {
             return Ok(0);
         };
         let debuggee = self.debuggee;
         let Ok(instance) = f.get_instance(debuggee) else {
             return Ok(0);
         };
-        let Ok(global) = instance.get_global(debuggee, index) else {
+        let Ok(global) = instance.get_global(debuggee, u32::try_from(index).unwrap()) else {
             return Ok(0);
         };
         let Ok(val) = global.get(debuggee) else {
@@ -397,18 +395,17 @@ impl<'a> Wasm for Debugger<'a> {
     fn read_wasm_stack(
         &self,
         _tid: Tid,
-        frame_depth: u32,
-        index: u32,
+        frame_depth: usize,
+        index: usize,
         buf: &mut [u8; 16],
     ) -> Result<usize, Self::Error> {
-        let depth = usize::try_from(frame_depth).unwrap();
-        let Some(f) = self.frame_cache.get(depth) else {
+        let Some(f) = self.frame_cache.get(frame_depth) else {
             return Ok(0);
         };
         let Ok(stack) = f.get_stack(self.debuggee) else {
             return Ok(0);
         };
-        let Some(val) = stack.get(usize::try_from(index).unwrap()) else {
+        let Some(val) = stack.get(index) else {
             return Ok(0);
         };
         let bytes = self.value_to_bytes(val.clone());
@@ -417,25 +414,25 @@ impl<'a> Wasm for Debugger<'a> {
     }
 }
 
-fn hex_encode_to(data: &[u8], write: &mut dyn FnMut(&[u8])) {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    for &b in data {
-        write(&[HEX[(b >> 4) as usize], HEX[(b & 0xf) as usize]]);
-    }
-}
-
 impl<'a> ProcessInfo for Debugger<'a> {
-    fn host_info(&self, write: &mut dyn FnMut(&[u8])) -> Result<(), Self::Error> {
-        write(b"triple:");
-        hex_encode_to(b"wasm32-unknown-unknown-wasm", write);
-        write(b";endian:little;ptrsize:4;");
+    fn host_info(
+        &self,
+        write_item: &mut dyn FnMut(&InfoResponse<'_>),
+    ) -> Result<(), Self::Error> {
+        write_item(&InfoResponse::Triple("wasm32-unknown-unknown-wasm"));
+        write_item(&InfoResponse::Endianness(Endianness::Little));
+        write_item(&InfoResponse::PointerSize(4));
         Ok(())
     }
 
-    fn process_info(&self, write: &mut dyn FnMut(&[u8])) -> Result<(), Self::Error> {
-        write(b"pid:1;triple:");
-        hex_encode_to(b"wasm32-unknown-unknown-wasm", write);
-        write(b";endian:little;ptrsize:4;");
+    fn process_info(
+        &self,
+        write_item: &mut dyn FnMut(&InfoResponse<'_>),
+    ) -> Result<(), Self::Error> {
+        write_item(&InfoResponse::Pid(Pid::new(1).unwrap()));
+        write_item(&InfoResponse::Triple("wasm32-unknown-unknown-wasm"));
+        write_item(&InfoResponse::Endianness(Endianness::Little));
+        write_item(&InfoResponse::PointerSize(4));
         Ok(())
     }
 }
