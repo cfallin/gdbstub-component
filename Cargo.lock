@@ -294,6 +294,7 @@ dependencies = [
 [[package]]
 name = "gdbstub"
 version = "0.7.9"
+source = "git+https://github.com/cfallin/gdbstub?branch=wasm-wip-2#4995653624d07051f6c2cc0a265b054778103191"
 dependencies = [
  "bitflags 2.11.0",
  "cfg-if",
