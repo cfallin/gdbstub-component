@@ -13,8 +13,8 @@ structopt = "0.3.26"
 wstd = "0.6.5"
 wasip2 = "1.0"
 futures = "0.3.31"
-gdbstub = { path = "../gdbstub" }
-gdbstub_arch = { path = "../gdbstub/gdbstub_arch" }
+gdbstub = "0.7.10"
+gdbstub_arch = "0.3.3"
 log = "0.4"
 env_logger = "0.11"
 
