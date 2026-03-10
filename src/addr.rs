@@ -1,13 +1,10 @@
 //! Synthetic Wasm address space expected by the gdbstub Wasm
 //! extensions.
 
-use std::collections::{HashMap, hash_map::Entry};
-
-use anyhow::Result;
-
 use crate::api::{Debuggee, Frame, Memory, Module};
-
-pub use gdbstub_arch::wasm::addr::{WasmAddr, WasmAddrType};
+use anyhow::Result;
+use gdbstub_arch::wasm::addr::{WasmAddr, WasmAddrType};
+use std::collections::{HashMap, hash_map::Entry};
 
 /// Representation of the synthesized Wasm address space.
 pub struct AddrSpace {

@@ -8,7 +8,6 @@ use crate::{
     addr::AddrSpace,
     api::{WasmType, WasmValue},
 };
-use addr::WasmAddr;
 use anyhow::Result;
 use futures::{FutureExt, select};
 use gdbstub::{
@@ -19,6 +18,7 @@ use gdbstub::{
         state_machine::{GdbStubStateMachine, GdbStubStateMachineInner, state::Running},
     },
 };
+use gdbstub_arch::wasm::addr::WasmAddr;
 use log::trace;
 use structopt::StructOpt;
 use wstd::{

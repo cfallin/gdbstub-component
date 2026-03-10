@@ -1,13 +1,10 @@
 //! gdbstub `Target` implementation.
 
 use crate::Debugger;
-use crate::addr::{AddrSpaceLookup, WasmAddr};
+use crate::addr::AddrSpaceLookup;
 use crate::api;
 use gdbstub::arch::lldb::{Encoding, Format, Generic, Register};
 use gdbstub::common::{Endianness, Pid, Signal, Tid};
-use gdbstub_arch::wasm::reg::id::WasmRegId;
-use gdbstub_arch::wasm::reg::WasmRegisters;
-use gdbstub_arch::wasm::Wasm as WasmArch;
 use gdbstub::target::Target;
 use gdbstub::target::TargetError;
 use gdbstub::target::TargetResult;
@@ -30,6 +27,10 @@ use gdbstub::target::ext::lldb_register_info_override::{
 use gdbstub::target::ext::memory_map::{MemoryMap, MemoryMapOps};
 use gdbstub::target::ext::process_info::{ProcessInfo, ProcessInfoOps, ProcessInfoResponse};
 use gdbstub::target::ext::wasm::{Wasm, WasmOps};
+use gdbstub_arch::wasm::Wasm as WasmArch;
+use gdbstub_arch::wasm::addr::WasmAddr;
+use gdbstub_arch::wasm::reg::WasmRegisters;
+use gdbstub_arch::wasm::reg::id::WasmRegId;
 
 impl<'a> Target for Debugger<'a> {
     type Arch = WasmArch;
