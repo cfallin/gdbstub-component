@@ -212,7 +212,7 @@ impl<'a> Debugger<'a> {
                     MultiThreadStopReason::SwBreak(self.tid)
                 };
                 let pc_bytes = self.current_pc.as_raw().to_le_bytes();
-                let mut regs = core::iter::once((0u32, pc_bytes.as_slice()));
+                let mut regs = core::iter::once((target::WasmRegId::Pc, pc_bytes.as_slice()));
                 Ok(inner.report_stop_with_regs(self, stop_reason, &mut regs)?)
             }
             _ => {

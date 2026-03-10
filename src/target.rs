@@ -20,12 +20,13 @@ use gdbstub::target::ext::base::single_register_access::{
 use gdbstub::target::ext::breakpoints::{
     Breakpoints, BreakpointsOps, SwBreakpoint, SwBreakpointOps,
 };
+use gdbstub::target::ext::host_info::{HostInfo, HostInfoOps, HostInfoResponse};
 use gdbstub::target::ext::libraries::{Libraries, LibrariesOps};
 use gdbstub::target::ext::lldb_register_info_override::{
     Callback, CallbackToken, LldbRegisterInfoOverride, LldbRegisterInfoOverrideOps,
 };
 use gdbstub::target::ext::memory_map::{MemoryMap, MemoryMapOps};
-use gdbstub::target::ext::process_info::{InfoResponse, ProcessInfo, ProcessInfoOps};
+use gdbstub::target::ext::process_info::{ProcessInfo, ProcessInfoOps, ProcessInfoResponse};
 use gdbstub::target::ext::wasm::{Wasm, WasmOps};
 use std::num::NonZeroUsize;
 
@@ -64,6 +65,10 @@ impl<'a> Target for Debugger<'a> {
     }
 
     fn support_process_info(&mut self) -> Option<ProcessInfoOps<'_, Self>> {
+        Some(self)
+    }
+
+    fn support_host_info(&mut self) -> Option<HostInfoOps<'_, Self>> {
         Some(self)
     }
 }
@@ -362,7 +367,7 @@ impl<'a> Wasm for Debugger<'a> {
         _tid: Tid,
         frame_depth: usize,
         index: usize,
-        buf: &mut [u8; 16],
+        buf: &mut [u8],
     ) -> Result<usize, Self::Error> {
         let Some(f) = self.frame_cache.get(frame_depth) else {
             return Ok(0);
@@ -383,7 +388,7 @@ impl<'a> Wasm for Debugger<'a> {
         _tid: Tid,
         frame_depth: usize,
         index: usize,
-        buf: &mut [u8; 16],
+        buf: &mut [u8],
     ) -> Result<usize, Self::Error> {
         let Some(f) = self.frame_cache.get(frame_depth) else {
             return Ok(0);
@@ -408,7 +413,7 @@ impl<'a> Wasm for Debugger<'a> {
         _tid: Tid,
         frame_depth: usize,
         index: usize,
-        buf: &mut [u8; 16],
+        buf: &mut [u8],
     ) -> Result<usize, Self::Error> {
         let Some(f) = self.frame_cache.get(frame_depth) else {
             return Ok(0);
@@ -425,25 +430,27 @@ impl<'a> Wasm for Debugger<'a> {
     }
 }
 
-impl<'a> ProcessInfo for Debugger<'a> {
+impl<'a> HostInfo for Debugger<'a> {
     fn host_info(
         &self,
-        write_item: &mut dyn FnMut(&InfoResponse<'_>),
+        write_item: &mut dyn FnMut(&HostInfoResponse<'_>),
     ) -> Result<(), Self::Error> {
-        write_item(&InfoResponse::Triple("wasm32-unknown-unknown-wasm"));
-        write_item(&InfoResponse::Endianness(Endianness::Little));
-        write_item(&InfoResponse::PointerSize(4));
+        write_item(&HostInfoResponse::Triple("wasm32-unknown-unknown-wasm"));
+        write_item(&HostInfoResponse::Endianness(Endianness::Little));
+        write_item(&HostInfoResponse::PointerSize(4));
         Ok(())
     }
+}
 
+impl<'a> ProcessInfo for Debugger<'a> {
     fn process_info(
         &self,
-        write_item: &mut dyn FnMut(&InfoResponse<'_>),
+        write_item: &mut dyn FnMut(&ProcessInfoResponse<'_>),
     ) -> Result<(), Self::Error> {
-        write_item(&InfoResponse::Pid(Pid::new(1).unwrap()));
-        write_item(&InfoResponse::Triple("wasm32-unknown-unknown-wasm"));
-        write_item(&InfoResponse::Endianness(Endianness::Little));
-        write_item(&InfoResponse::PointerSize(4));
+        write_item(&ProcessInfoResponse::Pid(Pid::new(1).unwrap()));
+        write_item(&ProcessInfoResponse::Triple("wasm32-unknown-unknown-wasm"));
+        write_item(&ProcessInfoResponse::Endianness(Endianness::Little));
+        write_item(&ProcessInfoResponse::PointerSize(4));
         Ok(())
     }
 }
@@ -503,6 +510,12 @@ impl RegId for WasmRegId {
             // 8-byte PC register
             0 => Some((WasmRegId::Pc, NonZeroUsize::new(8))),
             _ => None,
+        }
+    }
+
+    fn to_raw_id(&self) -> Option<usize> {
+        match self {
+            WasmRegId::Pc => Some(0),
         }
     }
 }
