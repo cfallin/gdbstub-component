@@ -252,7 +252,7 @@ impl AddrSpace {
             .module_ids
             .get(&module.unique_id())
             .expect("module not found in addr space");
-        let ret_pc = frame.get_return_address(debuggee).unwrap()?;
+        let ret_pc = frame.get_pc(debuggee).ok()?;
         Some(WasmAddr::new(WasmAddrType::Object, module_id, ret_pc))
     }
 
