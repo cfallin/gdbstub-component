@@ -4,8 +4,10 @@ use crate::Debugger;
 use crate::addr::{AddrSpaceLookup, WasmAddr};
 use crate::api;
 use gdbstub::arch::lldb::{Encoding, Format, Generic, Register};
-use gdbstub::arch::{Arch, RegId, Registers};
 use gdbstub::common::{Endianness, Pid, Signal, Tid};
+use gdbstub_arch::wasm::reg::id::WasmRegId;
+use gdbstub_arch::wasm::reg::WasmRegisters;
+use gdbstub_arch::wasm::Wasm as WasmArch;
 use gdbstub::target::Target;
 use gdbstub::target::TargetError;
 use gdbstub::target::TargetResult;
@@ -28,7 +30,6 @@ use gdbstub::target::ext::lldb_register_info_override::{
 use gdbstub::target::ext::memory_map::{MemoryMap, MemoryMapOps};
 use gdbstub::target::ext::process_info::{ProcessInfo, ProcessInfoOps, ProcessInfoResponse};
 use gdbstub::target::ext::wasm::{Wasm, WasmOps};
-use std::num::NonZeroUsize;
 
 impl<'a> Target for Debugger<'a> {
     type Arch = WasmArch;
@@ -80,7 +81,7 @@ impl<'a> MultiThreadBase for Debugger<'a> {
     }
 
     fn write_registers(&mut self, regs: &WasmRegisters, _tid: Tid) -> TargetResult<(), Self> {
-        self.current_pc = WasmAddr::from_raw(regs.pc).map_err(|_| TargetError::NonFatal)?;
+        self.current_pc = WasmAddr::from_raw(regs.pc).ok_or(TargetError::NonFatal)?;
         Ok(())
     }
 
@@ -90,7 +91,7 @@ impl<'a> MultiThreadBase for Debugger<'a> {
         data: &mut [u8],
         _tid: Tid,
     ) -> TargetResult<usize, Self> {
-        let addr = WasmAddr::from_raw(start_addr).map_err(|_| TargetError::NonFatal)?;
+        let addr = WasmAddr::from_raw(start_addr).ok_or(TargetError::NonFatal)?;
         let debuggee = self.debuggee;
         match self.addr_space.lookup(addr, debuggee) {
             AddrSpaceLookup::Module {
@@ -151,6 +152,7 @@ impl<'a> SingleRegisterAccess<Tid> for Debugger<'a> {
                 buf[..n].copy_from_slice(&bytes[..n]);
                 Ok(n)
             }
+            _ => Err(TargetError::NonFatal),
         }
     }
 
@@ -166,9 +168,10 @@ impl<'a> SingleRegisterAccess<Tid> for Debugger<'a> {
                     return Err(TargetError::NonFatal);
                 }
                 let raw = u64::from_le_bytes(val[..8].try_into().unwrap());
-                self.current_pc = WasmAddr::from_raw(raw).map_err(|_| TargetError::NonFatal)?;
+                self.current_pc = WasmAddr::from_raw(raw).ok_or(TargetError::NonFatal)?;
                 Ok(())
             }
+            _ => Err(TargetError::NonFatal),
         }
     }
 }
@@ -235,7 +238,7 @@ impl<'a> Breakpoints for Debugger<'a> {
 
 impl<'a> SwBreakpoint for Debugger<'a> {
     fn add_sw_breakpoint(&mut self, addr: u64, _kind: usize) -> TargetResult<bool, Self> {
-        let Ok(wasm_addr) = WasmAddr::from_raw(addr) else {
+        let Some(wasm_addr) = WasmAddr::from_raw(addr) else {
             return Ok(false);
         };
         let debuggee = self.debuggee;
@@ -251,7 +254,7 @@ impl<'a> SwBreakpoint for Debugger<'a> {
     }
 
     fn remove_sw_breakpoint(&mut self, addr: u64, _kind: usize) -> TargetResult<bool, Self> {
-        let Ok(wasm_addr) = WasmAddr::from_raw(addr) else {
+        let Some(wasm_addr) = WasmAddr::from_raw(addr) else {
             return Ok(false);
         };
         let debuggee = self.debuggee;
@@ -452,70 +455,5 @@ impl<'a> ProcessInfo for Debugger<'a> {
         write_item(&ProcessInfoResponse::Endianness(Endianness::Little));
         write_item(&ProcessInfoResponse::PointerSize(4));
         Ok(())
-    }
-}
-
-/// Architecture marker for the Wasm synthetic address space.
-///
-/// Even though Wasm is nominally a 32-bit platform, the gdbstub
-/// protocol for Wasm uses a 64-bit address word to multiplex module
-/// bytecode regions and linear memory regions into a single address
-/// space (see [`WasmAddr`]).
-pub enum WasmArch {}
-
-impl Arch for WasmArch {
-    type Usize = u64;
-    type Registers = WasmRegisters;
-    type RegId = WasmRegId;
-    type BreakpointKind = usize;
-}
-
-/// Single-register file: the synthetic 64-bit PC.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct WasmRegisters {
-    pub pc: u64,
-}
-
-impl Registers for WasmRegisters {
-    type ProgramCounter = u64;
-
-    fn pc(&self) -> u64 {
-        self.pc
-    }
-
-    fn gdb_serialize(&self, mut write_byte: impl FnMut(Option<u8>)) {
-        for byte in self.pc.to_le_bytes() {
-            write_byte(Some(byte));
-        }
-    }
-
-    fn gdb_deserialize(&mut self, bytes: &[u8]) -> Result<(), ()> {
-        if bytes.len() < 8 {
-            return Err(());
-        }
-        self.pc = u64::from_le_bytes(bytes[..8].try_into().unwrap());
-        Ok(())
-    }
-}
-
-/// The only register exposed to GDB: `pc` (register index 0).
-#[derive(Debug)]
-pub enum WasmRegId {
-    Pc,
-}
-
-impl RegId for WasmRegId {
-    fn from_raw_id(id: usize) -> Option<(Self, Option<NonZeroUsize>)> {
-        match id {
-            // 8-byte PC register
-            0 => Some((WasmRegId::Pc, NonZeroUsize::new(8))),
-            _ => None,
-        }
-    }
-
-    fn to_raw_id(&self) -> Option<usize> {
-        match self {
-            WasmRegId::Pc => Some(0),
-        }
     }
 }

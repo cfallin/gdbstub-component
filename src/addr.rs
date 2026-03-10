@@ -3,115 +3,11 @@
 
 use std::collections::{HashMap, hash_map::Entry};
 
-use anyhow::{Result, bail};
+use anyhow::Result;
 
 use crate::api::{Debuggee, Frame, Memory, Module};
 
-/// The type of a Wasm virtual address.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum WasmAddrType {
-    /// Address in a 32-bit linear memory.
-    Memory,
-    /// Address in a `.wasm` module image.
-    ///
-    /// Used both for memory-read commands to fetch the Wasm binary
-    /// from the gdbstub host, and software-breakpoint instructions.
-    Object,
-}
-
-/// Encoded Wasm virtual address as used in the gdbstub wire protocol.
-///
-/// WebAssembly has distinct address spaces, one per linear
-/// memory. The gdbstub protocol extended for Wasm also exposes
-/// `.wasm` source bytecode as read-only address spaces served by the
-/// gdbstub host. The protocol multiplexes each of these separate address
-/// spaces into a single 64-bit virtual address space. This type
-/// represents an address in that multiplexed space.
-///
-/// The address contains three fields:
-/// - Type (`WasmAddrType`): either linear memory (`Memory`) or a
-///   `.wasm` bytecode object (`Object`).
-/// - Index: the module or linear memory for this address. Ordering is
-///   defined by the host and provided in the `MemoryRegionInfo` response.
-/// - Offset: the offset within the given module or linear memory.
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct WasmAddr(u64);
-
-impl WasmAddr {
-    const TYPE_BITS: u32 = 2;
-    const MODULE_BITS: u32 = 30;
-    const OFFSET_BITS: u32 = 32;
-
-    const MODULE_SHIFT: u32 = Self::OFFSET_BITS;
-    const TYPE_SHIFT: u32 = Self::OFFSET_BITS + Self::MODULE_BITS;
-
-    const TYPE_MASK: u64 = (1u64 << Self::TYPE_BITS) - 1;
-    const MODULE_MASK: u64 = (1u64 << Self::MODULE_BITS) - 1;
-    const OFFSET_MASK: u64 = (1u64 << Self::OFFSET_BITS) - 1;
-
-    pub fn from_raw(raw: u64) -> Result<Self> {
-        let type_bits = (raw >> Self::TYPE_SHIFT) & Self::TYPE_MASK;
-        if type_bits > 1 {
-            bail!("Invalid Wasm address");
-        }
-        Ok(WasmAddr(raw))
-    }
-
-    pub fn as_raw(self) -> u64 {
-        self.0
-    }
-
-    pub fn new(addr_type: WasmAddrType, module_index: u32, offset: u32) -> Self {
-        assert_eq!(module_index >> Self::MODULE_BITS, 0);
-        let type_bits: u64 = match addr_type {
-            WasmAddrType::Memory => 0,
-            WasmAddrType::Object => 1,
-        };
-        WasmAddr(
-            (type_bits << Self::TYPE_SHIFT)
-                | ((module_index as u64) << Self::MODULE_SHIFT)
-                | (offset as u64),
-        )
-    }
-
-    pub fn addr_type(self) -> WasmAddrType {
-        match (self.0 >> Self::TYPE_SHIFT) & Self::TYPE_MASK {
-            0 => WasmAddrType::Memory,
-            1 => WasmAddrType::Object,
-            _ => panic!("WasmAddr: invalid type bits"),
-        }
-    }
-
-    pub fn module_index(self) -> u32 {
-        ((self.0 >> Self::MODULE_SHIFT) & Self::MODULE_MASK) as u32
-    }
-
-    pub fn offset(self) -> u32 {
-        (self.0 & Self::OFFSET_MASK) as u32
-    }
-}
-
-impl std::fmt::Display for WasmAddr {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let type_str = match self.addr_type() {
-            WasmAddrType::Memory => "Memory",
-            WasmAddrType::Object => "Object",
-        };
-        write!(
-            f,
-            "{}(module={}, offset={:#x})",
-            type_str,
-            self.module_index(),
-            self.offset()
-        )
-    }
-}
-
-impl std::fmt::Debug for WasmAddr {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "WasmAddr({self})")
-    }
-}
+pub use gdbstub_arch::wasm::addr::{WasmAddr, WasmAddrType};
 
 /// Representation of the synthesized Wasm address space.
 pub struct AddrSpace {

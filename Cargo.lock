@@ -293,8 +293,7 @@ dependencies = [
 
 [[package]]
 name = "gdbstub"
-version = "0.7.9"
-source = "git+https://github.com/cfallin/gdbstub?branch=wasm-wip-3#731b8c69931d0eecaddb4cb4d3fde94033d7201d"
+version = "0.7.10"
 dependencies = [
  "bitflags 2.11.0",
  "cfg-if",
@@ -312,11 +311,20 @@ dependencies = [
  "env_logger",
  "futures",
  "gdbstub",
+ "gdbstub_arch",
  "log",
  "structopt",
  "wasip2",
  "wit-bindgen 0.53.1",
  "wstd",
+]
+
+[[package]]
+name = "gdbstub_arch"
+version = "0.3.2"
+dependencies = [
+ "gdbstub",
+ "num-traits",
 ]
 
 [[package]]
