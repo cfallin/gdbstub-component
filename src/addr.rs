@@ -90,7 +90,7 @@ impl AddrSpace {
     /// Iterate over the base `WasmAddr` of every registered module.
     pub fn module_base_addrs(&self) -> impl Iterator<Item = WasmAddr> + '_ {
         (0..self.modules.len())
-            .map(|idx| WasmAddr::new(WasmAddrType::Object, u32::try_from(idx).unwrap(), 0))
+            .map(|idx| WasmAddr::new(WasmAddrType::Object, u32::try_from(idx).unwrap(), 0).unwrap())
     }
 
     /// Build the GDB memory-map XML describing all known regions.
@@ -103,7 +103,8 @@ impl AddrSpace {
             "<?xml version=\"1.0\"?><!DOCTYPE memory-map SYSTEM \"memory-map.dtd\"><memory-map>",
         );
         for (idx, bc) in self.module_bytecode.iter().enumerate() {
-            let start = WasmAddr::new(WasmAddrType::Object, u32::try_from(idx).unwrap(), 0);
+            let start =
+                WasmAddr::new(WasmAddrType::Object, u32::try_from(idx).unwrap(), 0).unwrap();
             let len = bc.len();
             if len > 0 {
                 write!(
@@ -116,7 +117,8 @@ impl AddrSpace {
             }
         }
         for (idx, mem) in self.memories.iter().enumerate() {
-            let start = WasmAddr::new(WasmAddrType::Memory, u32::try_from(idx).unwrap(), 0);
+            let start =
+                WasmAddr::new(WasmAddrType::Memory, u32::try_from(idx).unwrap(), 0).unwrap();
             let len = mem.size_bytes(debuggee);
             if len > 0 {
                 write!(
@@ -139,7 +141,7 @@ impl AddrSpace {
             .get(&module.unique_id())
             .expect("module not found in addr space");
         let pc = frame.get_pc(debuggee).unwrap();
-        WasmAddr::new(WasmAddrType::Object, module_id, pc)
+        WasmAddr::new(WasmAddrType::Object, module_id, pc).unwrap()
     }
 
     pub fn frame_to_return_addr(&self, frame: &Frame, debuggee: &Debuggee) -> Option<WasmAddr> {
@@ -149,7 +151,7 @@ impl AddrSpace {
             .get(&module.unique_id())
             .expect("module not found in addr space");
         let ret_pc = frame.get_pc(debuggee).ok()?;
-        Some(WasmAddr::new(WasmAddrType::Object, module_id, ret_pc))
+        Some(WasmAddr::new(WasmAddrType::Object, module_id, ret_pc).unwrap())
     }
 
     pub fn lookup(&self, addr: WasmAddr, d: &Debuggee) -> AddrSpaceLookup<'_> {

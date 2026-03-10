@@ -40,7 +40,7 @@ struct Options {
 struct Component;
 api::export!(Component with_types_in api);
 
-impl api::exports::wasmtime::debugger::debugger::Guest for Component {
+impl api::exports::bytecodealliance::wasmtime::debugger::Guest for Component {
     fn debug(d: &api::Debuggee, args: Vec<String>) {
         let options = Options::from_iter(args);
         if options.verbose {

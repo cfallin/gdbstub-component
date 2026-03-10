@@ -1,6 +1,6 @@
-package wasmtime:debugger@42.0.0;
+package bytecodealliance:wasmtime@42.0.0;
 
-world main {
+world debug-main {
   include wasi:cli/imports@0.2.6;
   import debuggee;
   export debugger;

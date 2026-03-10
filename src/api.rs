@@ -3,7 +3,7 @@
 use wstd::runtime::AsyncPollable;
 
 wit_bindgen::generate!({
-    world: "wasmtime:debugger/main",
+    world: "bytecodealliance:wasmtime/debug-main",
     path: "wit",
     with: {
         "wasi:io/poll@0.2.6": wasip2::io::poll,
@@ -35,7 +35,7 @@ wit_bindgen::generate!({
         "wasi:cli/exit@0.2.6": wasip2::cli::exit,
     }
 });
-pub(crate) use wasmtime::debugger::debuggee::*;
+pub(crate) use bytecodealliance::wasmtime::debuggee::*;
 
 /// One "resumption", or period of execution, in the debuggee.
 pub struct Resumption {
