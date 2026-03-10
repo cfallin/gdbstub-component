@@ -60,7 +60,9 @@ impl api::exports::bytecodealliance::wasmtime::debugger::Guest for Component {
             addr_space: AddrSpace::new(),
         };
         wstd::runtime::block_on(async {
-            debugger.run().await.expect("Debugger failed");
+            if let Err(e) = debugger.run().await {
+                trace!("debugger exited with error: {e}");
+            }
         });
     }
 }
@@ -103,7 +105,10 @@ impl<'a> Debugger<'a> {
         'mainloop: loop {
             match stub {
                 GdbStubStateMachine::Idle(mut inner) => {
-                    inner.borrow_conn().flush().await?;
+                    if inner.borrow_conn().flush().await.is_err() {
+                        // Connection closed or other outbound error.
+                        break 'mainloop;
+                    }
 
                     // Wait for an inbound network byte.
                     let Some(byte) = inner.borrow_conn().read_byte().await? else {
@@ -115,7 +120,10 @@ impl<'a> Debugger<'a> {
                 }
 
                 GdbStubStateMachine::Running(mut inner) => {
-                    inner.borrow_conn().flush().await?;
+                    if inner.borrow_conn().flush().await.is_err() {
+                        // Connection closed or other outbound error.
+                        break 'mainloop;
+                    }
 
                     // Wait for either a resumption or a byte from the
                     // connection.
@@ -131,7 +139,9 @@ impl<'a> Debugger<'a> {
                         }
                         byte = inner.borrow_conn().read_byte().fuse() => {
                             let Some(byte) = byte? else {
-                                inner.borrow_conn().flush().await?;
+                                // Eat any connection-closed errors on
+                                // the outbound flush.
+                                let _ = inner.borrow_conn().flush().await;
                                 // Connection closed.
                                 break 'mainloop;
                             };
@@ -140,11 +150,16 @@ impl<'a> Debugger<'a> {
                     }
                 }
                 GdbStubStateMachine::CtrlCInterrupt(mut inner) => {
-                    inner.borrow_conn().flush().await?;
+                    if inner.borrow_conn().flush().await.is_err() {
+                        // Connection error: break.
+                        break 'mainloop;
+                    }
                     stub = inner.interrupt_handled(self, None::<MultiThreadStopReason<u64>>)?;
                 }
                 GdbStubStateMachine::Disconnected(mut inner) => {
-                    inner.borrow_conn().flush().await?;
+                    // Eat any connection-closed errors -- we are
+                    // already in Disconnected state.
+                    let _ = inner.borrow_conn().flush().await;
                     break 'mainloop;
                 }
             }
